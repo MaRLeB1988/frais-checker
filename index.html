@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Vérificateur Fiches de Frais — HDF Rugby Arbitrage</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --navy: #002D5D;
+    --green: #97B732;
+    --red: #c62828;
+    --orange: #e65100;
+    --ok: #2e7d32;
+    --bg: #f5f6fa;
+    --card: #ffffff;
+    --border: #e0e0e0;
+    --text: #1a1a2e;
+    --muted: #666;
+  }
+  body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+  /* ── API KEY SCREEN ── */
+  #key-screen {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; padding: 1rem;
+  }
+  #key-screen .box {
+    background: var(--card); border-radius: 16px; padding: 2.5rem 2rem;
+    max-width: 440px; width: 100%; border: 1px solid var(--border);
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+  #key-screen .logo { display: flex; align-items: center; gap: 12px; margin-bottom: 2rem; }
+  #key-screen .badge { background: var(--navy); border-radius: 8px; padding: 8px 12px; }
+  #key-screen .badge-top { color: var(--green); font-weight: 800; font-size: 11px; letter-spacing: 1.5px; }
+  #key-screen .badge-bot { color: white; font-weight: 700; font-size: 9px; letter-spacing: 0.5px; margin-top: 1px; }
+  #key-screen h2 { font-size: 18px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  #key-screen p { font-size: 13px; color: var(--muted); margin-bottom: 1.5rem; line-height: 1.5; }
+  #key-screen input {
+    width: 100%; border: 1.5px solid var(--border); border-radius: 8px;
+    padding: 10px 14px; font-size: 14px; margin-bottom: 12px; outline: none;
+    transition: border-color .15s; font-family: monospace; letter-spacing: 1px;
+  }
+  #key-screen input:focus { border-color: var(--navy); }
+  #key-screen button {
+    width: 100%; background: var(--navy); color: white; border: none;
+    border-radius: 8px; padding: 11px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: opacity .15s;
+  }
+  #key-screen button:hover { opacity: .88; }
+  #key-screen .note { font-size: 11px; color: #aaa; text-align: center; margin-top: 12px; line-height: 1.5; }
+
+  /* ── MAIN APP ── */
+  #app { display: none; max-width: 880px; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+
+  /* Header */
+  .app-header {
+    display: flex; align-items: center; gap: 14px;
+    padding-bottom: 1rem; border-bottom: 3px solid var(--navy);
+    margin-bottom: 1.5rem;
+  }
+  .app-header .badge { background: var(--navy); border-radius: 8px; padding: 7px 12px; flex-shrink: 0; }
+  .app-header .badge-top { color: var(--green); font-weight: 800; font-size: 11px; letter-spacing: 1.5px; }
+  .app-header .badge-bot { color: white; font-weight: 700; font-size: 9px; letter-spacing: 0.5px; margin-top: 1px; }
+  .app-header h1 { font-size: 17px; font-weight: 700; color: var(--navy); }
+  .app-header p { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .header-actions { margin-left: auto; display: flex; gap: 8px; }
+  .btn-ghost {
+    border: 1px solid var(--border); background: white; border-radius: 6px;
+    padding: 5px 12px; font-size: 12px; cursor: pointer; color: #555;
+    transition: background .1s;
+  }
+  .btn-ghost:hover { background: #f0f0f0; }
+
+  /* Stats */
+  #stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 1.5rem; }
+  .stat-card { background: var(--card); border-radius: 8px; padding: 10px 14px; border-left: 3px solid #ccc; }
+  .stat-label { font-size: 10px; color: #999; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 2px; }
+  .stat-val { font-size: 24px; font-weight: 700; line-height: 1; }
+
+  /* Drop zone */
+  #dropzone {
+    border: 2px dashed var(--navy); border-radius: 12px; padding: 2rem 1rem;
+    text-align: center; cursor: pointer; background: #f8f9ff;
+    transition: border-color .15s, background .15s; margin-bottom: 1.5rem;
+    user-select: none;
+  }
+  #dropzone.over { border-color: var(--green); background: #f4faec; }
+  #dropzone .dz-icon { font-size: 28px; margin-bottom: 8px; }
+  #dropzone .dz-title { font-weight: 600; color: var(--navy); font-size: 14px; }
+  #dropzone .dz-sub { font-size: 12px; color: #888; margin-top: 4px; }
+
+  /* Fiche card */
+  .fiche {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    margin-bottom: 8px; overflow: hidden; border-left-width: 4px;
+  }
+  .fiche-header {
+    display: flex; align-items: center; gap: 12px; padding: 11px 16px;
+    cursor: pointer; transition: background .1s;
+  }
+  .fiche-header:hover { background: #f5f7ff; }
+  .fiche-badge {
+    border-radius: 20px; padding: 2px 9px; font-size: 11px; font-weight: 700;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .fiche-name { font-weight: 700; font-size: 14px; color: var(--navy); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .fiche-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .fiche-amount { text-align: right; flex-shrink: 0; }
+  .fiche-amount-val { font-weight: 700; font-size: 17px; }
+  .fiche-amount-label { font-size: 10px; font-weight: 600; }
+  .fiche-chevron { color: #bbb; font-size: 12px; flex-shrink: 0; }
+
+  /* Spinner */
+  .spinner {
+    width: 16px; height: 16px; border: 2px solid var(--navy);
+    border-top-color: transparent; border-radius: 50%; flex-shrink: 0;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Detail panel */
+  .fiche-detail { border-top: 1px solid #f0f0f0; padding: 14px 16px; background: #fafafa; display: none; }
+  .fiche-detail.open { display: block; }
+  .detail-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+  .detail-cell {
+    background: white; border: 1px solid #e8e8e8; border-radius: 7px; padding: 8px 10px;
+  }
+  .detail-cell.alert { background: #ffebee; border-color: #ef9a9a; }
+  .detail-cell-label { font-size: 10px; color: #aaa; text-transform: uppercase; letter-spacing: 0.5px; }
+  .detail-cell-val { font-weight: 700; font-size: 14px; color: #1a1a1a; margin-top: 1px; }
+  .detail-cell.alert .detail-cell-val { color: var(--red); }
+  .detail-cell-note { font-size: 10px; color: #bbb; }
+  .detail-cell-note.warn { color: var(--red); }
+  .total-bar {
+    display: flex; align-items: center; background: var(--navy); border-radius: 8px;
+    padding: 8px 14px; margin-bottom: 12px;
+  }
+  .total-bar-label { color: rgba(255,255,255,0.6); font-size: 12px; flex: 1; }
+  .total-bar-val { color: white; font-weight: 700; font-size: 17px; }
+  .msg { border-radius: 6px; padding: 7px 12px; font-size: 12px; margin-bottom: 5px; display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
+  .msg-icon { flex-shrink: 0; font-weight: 700; }
+  .msg.issue { background: #ffebee; color: var(--red); }
+  .msg.warning { background: #fff8e1; color: var(--orange); }
+  .msg.ok { background: #e8f5e9; color: var(--ok); }
+  .obs { margin-top: 8px; font-size: 12px; color: #888; font-style: italic; padding-top: 6px; border-top: 1px solid #eee; }
+
+  /* Export bar */
+  #export-bar {
+    background: var(--navy); border-radius: 12px; padding: 14px 18px;
+    display: none; align-items: center; gap: 16px; margin-bottom: 1.5rem;
+  }
+  #export-bar.visible { display: flex; }
+  .export-label { color: rgba(255,255,255,0.6); font-size: 11px; margin-bottom: 2px; }
+  .export-total { color: white; font-weight: 700; font-size: 20px; }
+  .export-sub { font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.5); margin-left: 8px; }
+  #btn-export {
+    background: var(--green); color: white; border: none; border-radius: 8px;
+    padding: 10px 20px; font-weight: 700; font-size: 13px; cursor: pointer;
+    white-space: nowrap; flex-shrink: 0; transition: opacity .15s;
+  }
+  #btn-export:hover { opacity: .88; }
+
+  /* Rules */
+  .rules { background: #f0f4ff; border-radius: 10px; padding: 14px 16px; font-size: 12px; margin-top: 2rem; }
+  .rules-title { font-weight: 700; color: var(--navy); margin-bottom: 8px; font-size: 13px; }
+  .rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }
+  .rule-item { display: flex; gap: 6px; align-items: flex-start; color: #445; }
+  .rule-check { color: var(--green); font-weight: 700; flex-shrink: 0; }
+
+  /* Empty state */
+  #empty { text-align: center; color: #ccc; padding: 2rem 0; font-size: 13px; }
+
+  @media (max-width: 600px) {
+    .detail-grid { grid-template-columns: repeat(2, 1fr); }
+    #stats { grid-template-columns: repeat(2, 1fr); }
+    .rules-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══ API KEY SCREEN ══════════════════════════════════════════ -->
+<div id="key-screen">
+  <div class="box">
+    <div class="logo">
+      <div class="badge">
+        <div class="badge-top">HDF RUGBY</div>
+        <div class="badge-bot">ARBITRAGE</div>
+      </div>
+      <div>
+        <h2>Vérificateur de fiches de frais</h2>
+        <p style="margin:0;font-size:12px;color:#999">Agent de pré-conformité · Procédure 2025-2026</p>
+      </div>
+    </div>
+    <p>Pour démarrer, entrez votre clé API Anthropic. Elle sera stockée localement dans votre navigateur et n'est jamais envoyée ailleurs.</p>
+    <input type="password" id="api-key-input" placeholder="sk-ant-api03-..." autocomplete="off" />
+    <button onclick="saveKey()">Enregistrer et continuer</button>
+    <p class="note">
+      Obtenez votre clé sur <strong>console.anthropic.com</strong><br>
+      ~0,005 € par analyse · Stockage : localStorage (navigateur uniquement)
+    </p>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ════════════════════════════════════════════════ -->
+<div id="app">
+
+  <!-- Header -->
+  <div class="app-header">
+    <div class="badge">
+      <div class="badge-top">HDF RUGBY</div>
+      <div class="badge-bot">ARBITRAGE</div>
+    </div>
+    <div>
+      <h1>Vérificateur de fiches de frais</h1>
+      <p>Agent de pré-conformité comptable · Procédure 2025-2026</p>
+    </div>
+    <div class="header-actions">
+      <button class="btn-ghost" onclick="clearAll()">Tout effacer</button>
+      <button class="btn-ghost" onclick="changeKey()">Clé API</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div id="stats" style="display:none">
+    <div class="stat-card" style="border-color:#002D5D">
+      <div class="stat-label">Analysées</div>
+      <div class="stat-val" id="s-total" style="color:#002D5D">0</div>
+    </div>
+    <div class="stat-card" style="border-color:#4caf50">
+      <div class="stat-label">Conformes</div>
+      <div class="stat-val" id="s-ok" style="color:#2e7d32">0</div>
+    </div>
+    <div class="stat-card" style="border-color:#ff9800">
+      <div class="stat-label">Attention</div>
+      <div class="stat-val" id="s-att" style="color:#e65100">0</div>
+    </div>
+    <div class="stat-card" style="border-color:#f44336">
+      <div class="stat-label">Non conformes</div>
+      <div class="stat-val" id="s-nc" style="color:#c62828">0</div>
+    </div>
+  </div>
+
+  <!-- Drop zone -->
+  <div id="dropzone"
+    ondragover="ev.preventDefault();this.classList.add('over')"
+    ondragleave="this.classList.remove('over')"
+    ondrop="onDrop(event)"
+    onclick="document.getElementById('file-input').click()">
+    <div class="dz-icon">📂</div>
+    <div class="dz-title">Déposer les fiches de frais PDF ici</div>
+    <div class="dz-sub">Convocation + fiche de frais · Plusieurs fichiers acceptés simultanément</div>
+    <input type="file" id="file-input" multiple accept=".pdf" style="display:none" onchange="handleFiles(this.files)">
+  </div>
+
+  <!-- Export bar -->
+  <div id="export-bar">
+    <div style="flex:1">
+      <div class="export-label">Total engagements Ligue HDF</div>
+      <div class="export-total"><span id="total-ligue">0,00</span> €<span class="export-sub" id="nb-ligue"></span></div>
+    </div>
+    <button id="btn-export" onclick="exportXLSX()">↓ Exporter récap Excel</button>
+  </div>
+
+  <!-- Fiches list -->
+  <div id="fiches-list"></div>
+
+  <!-- Empty state -->
+  <div id="empty">Aucune fiche chargée — déposez vos PDFs ci-dessus pour démarrer</div>
+
+  <!-- Rules -->
+  <div class="rules">
+    <div class="rules-title">Règles de conformité vérifiées automatiquement</div>
+    <div class="rules-grid">
+      <div class="rule-item"><span class="rule-check">✓</span>IK calculé sur km RÉELS (pas km arrondi)</div>
+      <div class="rule-item"><span class="rule-check">✓</span>IRF correct selon rôle et compétition</div>
+      <div class="rule-item"><span class="rule-check">✓</span>Cohérence sous-total déplacement</div>
+      <div class="rule-item"><span class="rule-check">✓</span>Cohérence total général</div>
+      <div class="rule-item"><span class="rule-check">✓</span>Justificatifs péages présents si péages déclarés</div>
+      <div class="rule-item"><span class="rule-check">✓</span>Signature présente sur la fiche</div>
+      <div class="rule-item"><span class="rule-check">✓</span>Volet 1 présent : convocation / désignation</div>
+      <div class="rule-item"><span class="rule-check">✓</span>Volet 2 présent : fiche de frais remplie</div>
+      <div class="rule-item"><span class="rule-check">✓</span>Match FFR → NON CONFORME (circuit Oval-E)</div>
+      <div class="rule-item"><span class="rule-check">✓</span>Détection km arrondi utilisé par erreur</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── CONSTANTS ──────────────────────────────────────────────────
+const IK_RATE = 0.45;
+const NAVY = '#002D5D';
+const GREEN = '#97B732';
+
+const STATUS_CFG = {
+  CONFORME:     { label: 'Conforme',      bg: '#e8f5e9', color: '#2e7d32', dot: '#4caf50' },
+  ATTENTION:    { label: 'Attention',     bg: '#fff8e1', color: '#e65100', dot: '#ff9800' },
+  NON_CONFORME: { label: 'Non conforme',  bg: '#ffebee', color: '#c62828', dot: '#f44336' },
+};
+
+const SYSTEM_PROMPT = `Tu es un agent comptable expert en vérification de fiches de frais d'arbitres de rugby pour la Ligue des Hauts-de-France de Rugby (saison 2025-2026).
+
+Analyse le document PDF fourni qui contient une convocation et/ou une fiche de frais d'un officiel de match.
+
+GRILLE DES IRF (Indemnités Représentatives de Frais) selon la procédure officielle HDF:
+- Arbitre de champ sur National U16/U18, Excellence B, Fédérale B, Fédérale 2 Féminine: 70€ (entité: FFR, via Oval-E)
+- Arbitre de champ sur Régionale 1/2/3, Féminines X, Régional 1/2/3, U16/U19, Réserves R1/R2, Plateau U14, Cross Rugby: 70€ (entité: Ligue)
+- Arbitre de champ sur Plateau Rugby à 7: 75€ (entité: Ligue)
+- Arbitre de champ sur Match Amical/Loisirs/Tournois: 50€ (entité: Ligue, refacturé club)
+- Arbitre Assistant (AA1 ou AA2) sur toutes phases régulières et finales: 60€ (entité: Ligue)
+- Représentant Fédéral sur R1/R2/R3/Féminines/Régional 1-2/U16/U19/Réserves: 60€ (entité: Ligue)
+- Représentant Fédéral sur Plateau U14: 50€ (entité: Ligue)
+- Superviseur (tous niveaux Ligue y compris F2 et F3): 50€ (entité: Ligue)
+
+Taux kilométrique officiel: 0,45 €/km appliqué sur le kilométrage RÉEL (pas le kilométrage arrondi +10%).
+Sur la fiche, la ligne "Km parcourus A.R." indique d'abord le km réel (ex: 195 km) puis "Arrondi à (1): 201 km". Le calcul doit être fait sur le km RÉEL.
+
+DOCUMENTS ATTENDUS — les 2 volets doivent être dans le même PDF:
+- Volet 1 (convocation) : lettre officielle de désignation mentionnant l'officiel, son rôle, la rencontre, la date, les distances estimées. Émise par la Ligue ou la FFR.
+- Volet 2 (fiche de frais) : formulaire FICHE DE DEPLACEMENT / FICHE DE FRAIS avec les cases remplies (km parcourus, IK, péages, IRF, total, signature).
+Indique true pour chaque volet si tu le vois clairement dans le document, false sinon.
+
+JUSTIFICATIFS DE PÉAGES : les tickets de péage (reçus Sanef, Vinci, etc.) peuvent apparaître comme pages supplémentaires dans le PDF. Indique true si tu vois des reçus/tickets de péage dans le document, false si des péages sont déclarés mais aucun justificatif n'est visible, null si aucun péage n'est déclaré.
+
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans texte avant ou après:
+{"officiel_nom":"NOM Prénom","role":"Arbitre de champ|Arbitre Assistant 1|Arbitre Assistant 2|Représentant Fédéral|Superviseur|Inconnu","competition":"ex: Régionale 2","entite_payante":"FFR|Ligue|Inconnu","date_match":"DD/MM/YYYY","date_signature":"DD/MM/YYYY","equipe_domicile":"","equipe_visiteur":"","km_reel":0,"km_arrondi":0,"km_utilises_calcul":0,"ik_montant_declare":0,"peages_montant_declare":0,"sous_total_deplacement":0,"irf_declare":0,"irf_attendu":0,"total_declare":0,"signature_presente":true,"volet_convocation_present":true,"volet_fiche_frais_presente":true,"justificatifs_peages_presents":null,"anomalies_detectees":[],"observations":""}`;
+
+// ── STATE ──────────────────────────────────────────────────────
+let fiches = [];
+let openStates = {};
+
+// ── KEY MANAGEMENT ─────────────────────────────────────────────
+function saveKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key.startsWith('sk-ant')) {
+    alert('Clé API invalide — elle doit commencer par sk-ant');
+    return;
+  }
+  localStorage.setItem('anthropic_key', key);
+  document.getElementById('key-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+}
+
+function changeKey() {
+  const current = localStorage.getItem('anthropic_key') || '';
+  const newKey = prompt('Entrez votre nouvelle clé API Anthropic :', current);
+  if (newKey !== null) {
+    localStorage.setItem('anthropic_key', newKey.trim());
+    alert('Clé mise à jour.');
+  }
+}
+
+function getKey() { return localStorage.getItem('anthropic_key'); }
+
+// ── INIT ────────────────────────────────────────────────────────
+window.addEventListener('DOMContentLoaded', () => {
+  const key = getKey();
+  if (key && key.startsWith('sk-ant')) {
+    document.getElementById('key-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+  }
+});
+
+// ── DROP ZONE ───────────────────────────────────────────────────
+function onDrop(ev) {
+  ev.preventDefault();
+  document.getElementById('dropzone').classList.remove('over');
+  handleFiles(ev.dataTransfer.files);
+}
+
+function handleFiles(fileList) {
+  const pdfs = Array.from(fileList).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+  pdfs.forEach(processFile);
+}
+
+// ── FILE PROCESSING ─────────────────────────────────────────────
+function processFile(file) {
+  const id = `${file.name}-${Date.now()}-${Math.random()}`;
+  const fiche = { id, fileName: file.name, status: 'processing', data: null, conformity: null, error: null };
+  fiches.push(fiche);
+  renderFiche(fiche);
+  updateStats();
+  document.getElementById('empty').style.display = 'none';
+
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const b64 = e.target.result.split(',')[1];
+    try {
+      const data = await analyzeFile(b64);
+      const conformity = checkConformity(data);
+      const idx = fiches.findIndex(f => f.id === id);
+      if (idx >= 0) { fiches[idx].status = 'done'; fiches[idx].data = data; fiches[idx].conformity = conformity; }
+      renderFiche(fiches[idx]);
+      updateStats();
+      updateExportBar();
+    } catch (err) {
+      const idx = fiches.findIndex(f => f.id === id);
+      if (idx >= 0) { fiches[idx].status = 'error'; fiches[idx].error = err.message; }
+      renderFiche(fiches.find(f => f.id === id));
+      updateStats();
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── ANTHROPIC API ───────────────────────────────────────────────
+async function analyzeFile(b64) {
+  const key = getKey();
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: 'user', content: [
+        { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+        { type: 'text', text: 'Analyse cette fiche de frais et retourne le JSON structuré.' }
+      ]}]
+    })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `Erreur API ${res.status}`);
+  }
+  const api = await res.json();
+  const text = api.content?.find(b => b.type === 'text')?.text || '{}';
+  return JSON.parse(text.replace(/```json\n?|```/g, '').trim());
+}
+
+// ── CONFORMITY CHECK ────────────────────────────────────────────
+function checkConformity(d) {
+  const issues = [], warnings = [];
+
+  if (d.entite_payante === 'FFR') {
+    issues.push('Match FFR : remboursement géré via Oval-E / FFR — cette fiche ne doit PAS être transmise à la Ligue HDF');
+  }
+
+  const kmRef = d.km_reel || d.km_utilises_calcul || 0;
+  if (kmRef > 0 && d.ik_montant_declare != null) {
+    const expected = Math.round(kmRef * IK_RATE * 100) / 100;
+    if (Math.abs(expected - d.ik_montant_declare) > 0.10) {
+      const withArrondi = d.km_arrondi ? Math.round(d.km_arrondi * IK_RATE * 100) / 100 : null;
+      const usedArrondi = withArrondi && Math.abs(withArrondi - d.ik_montant_declare) < 0.10;
+      if (usedArrondi) {
+        issues.push(`IK calculé sur km arrondi (${d.km_arrondi} km) au lieu du km réel (${kmRef} km) — attendu : ${expected.toFixed(2)} €, déclaré : ${d.ik_montant_declare.toFixed(2)} €`);
+      } else {
+        issues.push(`IK incorrect : ${kmRef} km réels × 0,45 = ${expected.toFixed(2)} € (déclaré : ${d.ik_montant_declare.toFixed(2)} €)`);
+      }
+    }
+  }
+
+  if (d.irf_declare != null && d.irf_attendu != null && d.irf_declare !== d.irf_attendu) {
+    issues.push(`IRF incorrect : déclaré ${d.irf_declare} €, attendu ${d.irf_attendu} € pour ce rôle/compétition`);
+  }
+
+  if (d.sous_total_deplacement != null && d.irf_declare != null && d.total_declare != null) {
+    const expected = Math.round((d.sous_total_deplacement + d.irf_declare) * 100) / 100;
+    if (Math.abs(expected - d.total_declare) > 0.10) {
+      issues.push(`Total incorrect : ${d.sous_total_deplacement.toFixed(2)} + ${d.irf_declare} = ${expected.toFixed(2)} € ≠ ${d.total_declare.toFixed(2)} €`);
+    }
+  }
+
+  if (d.peages_montant_declare > 0) {
+    if (d.justificatifs_peages_presents === false)
+      issues.push(`Péages déclarés (${d.peages_montant_declare.toFixed(2)} €) mais aucun justificatif joint`);
+    else if (d.justificatifs_peages_presents === null)
+      warnings.push(`Péages déclarés (${d.peages_montant_declare.toFixed(2)} €) — présence des justificatifs non confirmée`);
+  }
+
+  if (d.signature_presente === false) issues.push('Signature absente');
+  if (d.volet_convocation_present === false) issues.push('Volet 1 manquant : convocation / lettre de désignation non jointe');
+  if (d.volet_fiche_frais_presente === false) issues.push('Volet 2 manquant : fiche de frais / fiche de déplacement non jointe');
+
+  (d.anomalies_detectees || []).forEach(a => { if (a && a.trim()) warnings.push(a); });
+
+  return {
+    status: issues.length > 0 ? 'NON_CONFORME' : warnings.length > 0 ? 'ATTENTION' : 'CONFORME',
+    issues, warnings
+  };
+}
+
+// ── RENDER ──────────────────────────────────────────────────────
+function renderFiche(fiche) {
+  const existing = document.getElementById(`fiche-${fiche.id}`);
+  const html = buildFicheHTML(fiche);
+  if (existing) {
+    existing.outerHTML = html;
+  } else {
+    document.getElementById('fiches-list').insertAdjacentHTML('beforeend', html);
+  }
+}
+
+function buildFicheHTML(f) {
+  const d = f.data;
+  const cfg = f.conformity ? STATUS_CFG[f.conformity.status] : null;
+  const dotColor = cfg ? cfg.dot : (f.status === 'error' ? '#f44336' : '#ccc');
+  const isOpen = !!openStates[f.id];
+
+  let headerContent = '';
+  if (f.status === 'processing') {
+    headerContent = `<div class="spinner"></div>
+      <div style="flex:1"><div class="fiche-name">${esc(f.fileName)}</div>
+      <div class="fiche-sub">Analyse en cours par Claude…</div></div>`;
+  } else if (f.status === 'error') {
+    headerContent = `<span style="color:#c62828;font-size:16px;flex-shrink:0">✗</span>
+      <div style="flex:1"><div class="fiche-name">${esc(f.fileName)}</div>
+      <div class="fiche-sub" style="color:#c62828">Erreur : ${esc(f.error)}</div></div>`;
+  } else if (d) {
+    const rencontre = [d.equipe_domicile, d.equipe_visiteur].filter(Boolean).join(' vs ');
+    const amountColor = d.entite_payante === 'FFR' ? '#aaa' : NAVY;
+    const amountLabel = d.entite_payante === 'FFR'
+      ? `<div class="fiche-amount-label" style="color:#aaa">via FFR</div>`
+      : `<div class="fiche-amount-label" style="color:${GREEN}">Ligue HDF</div>`;
+    headerContent = `
+      <span class="fiche-badge" style="background:${cfg.bg};color:${cfg.color}">${cfg.label}</span>
+      <div style="flex:1;min-width:0">
+        <div class="fiche-name">${esc(d.officiel_nom || f.fileName)}</div>
+        <div class="fiche-sub">${esc(d.role)} · ${esc(d.competition)} · ${esc(d.date_match || '—')}${rencontre ? ' · ' + esc(rencontre) : ''}</div>
+      </div>
+      <div class="fiche-amount">
+        <div class="fiche-amount-val" style="color:${amountColor}">${d.total_declare != null ? d.total_declare.toFixed(2) + ' €' : '—'}</div>
+        ${amountLabel}
+      </div>
+      <span class="fiche-chevron">${isOpen ? '▲' : '▼'}</span>`;
+  }
+
+  let detailHTML = '';
+  if (f.status === 'done' && d) {
+    const kmRef = d.km_reel || d.km_utilises_calcul || 0;
+    const cells = [
+      { label: 'Km réels déclarés', val: d.km_reel != null ? `${d.km_reel} km` : '—', note: 'base de calcul IK', alert: false },
+      { label: 'Km arrondi (+10%)', val: d.km_arrondi != null ? `${d.km_arrondi} km` : '—', note: 'non utilisé pour IK', alert: false },
+      { label: 'IK attendu (km réel)', val: kmRef ? `${(kmRef * IK_RATE).toFixed(2)} €` : '—', note: kmRef ? `${kmRef} × 0,45` : '', alert: false },
+      { label: 'IK déclaré', val: d.ik_montant_declare != null ? `${d.ik_montant_declare.toFixed(2)} €` : '—', note: '', alert: false },
+      { label: 'Péages', val: d.peages_montant_declare > 0 ? `${d.peages_montant_declare.toFixed(2)} €` : '0 €',
+        note: d.justificatifs_peages_presents === true ? 'justificatifs présents' : d.justificatifs_peages_presents === false ? '⚠ sans justificatifs' : '',
+        noteWarn: d.justificatifs_peages_presents === false, alert: false },
+      { label: 'IRF attendu', val: d.irf_attendu != null ? `${d.irf_attendu} €` : '—', note: '', alert: false },
+      { label: 'IRF déclaré', val: d.irf_declare != null ? `${d.irf_declare} €` : '—', note: '', alert: false },
+      { label: 'Sous-total déplacement', val: d.sous_total_deplacement != null ? `${d.sous_total_deplacement.toFixed(2)} €` : '—', note: '', alert: false },
+      { label: 'Entité payante', val: d.entite_payante || '—', note: '', alert: d.entite_payante === 'FFR' },
+      { label: 'Volet 1 — convocation', val: d.volet_convocation_present === true ? '✓ Présent' : d.volet_convocation_present === false ? '✗ Absent' : '—', note: '', alert: d.volet_convocation_present === false },
+      { label: 'Volet 2 — fiche de frais', val: d.volet_fiche_frais_presente === true ? '✓ Présent' : d.volet_fiche_frais_presente === false ? '✗ Absent' : '—', note: '', alert: d.volet_fiche_frais_presente === false },
+    ];
+
+    const cellsHTML = cells.map(c => `
+      <div class="detail-cell${c.alert ? ' alert' : ''}">
+        <div class="detail-cell-label">${esc(c.label)}</div>
+        <div class="detail-cell-val">${esc(c.val)}</div>
+        ${c.note ? `<div class="detail-cell-note${c.noteWarn ? ' warn' : ''}">${esc(c.note)}</div>` : ''}
+      </div>`).join('');
+
+    const messagesHTML = [
+      ...(f.conformity.issues.map(m => `<div class="msg issue"><span class="msg-icon">✗</span>${esc(m)}</div>`)),
+      ...(f.conformity.warnings.map(m => `<div class="msg warning"><span class="msg-icon">ℹ</span>${esc(m)}</div>`)),
+      ...(f.conformity.issues.length === 0 && f.conformity.warnings.length === 0
+        ? [`<div class="msg ok"><span>✓</span> Aucune anomalie — fiche conforme à la procédure</div>`]
+        : [])
+    ].join('');
+
+    const ffr = d.entite_payante === 'FFR' ? ' (via FFR, hors Ligue)' : '';
+    detailHTML = `
+      <div class="fiche-detail${isOpen ? ' open' : ''}" id="detail-${f.id}">
+        <div class="detail-grid">${cellsHTML}</div>
+        <div class="total-bar">
+          <span class="total-bar-label">Total à verser</span>
+          <span class="total-bar-val">${d.total_declare != null ? d.total_declare.toFixed(2) + ' €' : '—'}${ffr}</span>
+        </div>
+        ${messagesHTML}
+        ${d.observations ? `<div class="obs">Observation : ${esc(d.observations)}</div>` : ''}
+      </div>`;
+  }
+
+  const clickable = f.status === 'done' ? `onclick="toggleFiche('${f.id}')"` : '';
+
+  return `<div class="fiche" id="fiche-${f.id}" style="border-left-color:${dotColor}">
+    <div class="fiche-header" ${clickable}>${headerContent}</div>
+    ${detailHTML}
+  </div>`;
+}
+
+function toggleFiche(id) {
+  openStates[id] = !openStates[id];
+  const detail = document.getElementById(`detail-${id}`);
+  const fiche = fiches.find(f => f.id === id);
+  if (detail) detail.classList.toggle('open', openStates[id]);
+  // update chevron
+  const header = document.querySelector(`#fiche-${id} .fiche-chevron`);
+  if (header) header.textContent = openStates[id] ? '▲' : '▼';
+}
+
+function updateStats() {
+  const done = fiches.filter(f => f.status === 'done');
+  if (done.length === 0) {
+    document.getElementById('stats').style.display = 'none';
+    return;
+  }
+  document.getElementById('stats').style.display = 'grid';
+  document.getElementById('s-total').textContent = done.length;
+  document.getElementById('s-ok').textContent = done.filter(f => f.conformity?.status === 'CONFORME').length;
+  document.getElementById('s-att').textContent = done.filter(f => f.conformity?.status === 'ATTENTION').length;
+  document.getElementById('s-nc').textContent = done.filter(f => f.conformity?.status === 'NON_CONFORME').length;
+}
+
+function updateExportBar() {
+  const done = fiches.filter(f => f.status === 'done' && f.data);
+  if (!done.length) { document.getElementById('export-bar').classList.remove('visible'); return; }
+  const ligue = done.filter(f => f.data.entite_payante === 'Ligue');
+  const total = ligue.reduce((s, f) => s + (f.data.total_declare || 0), 0);
+  document.getElementById('total-ligue').textContent = total.toFixed(2).replace('.', ',');
+  document.getElementById('nb-ligue').textContent = ` (${ligue.length} fiche${ligue.length > 1 ? 's' : ''})`;
+  document.getElementById('export-bar').classList.add('visible');
+}
+
+function clearAll() {
+  fiches = []; openStates = {};
+  document.getElementById('fiches-list').innerHTML = '';
+  document.getElementById('empty').style.display = 'block';
+  document.getElementById('stats').style.display = 'none';
+  document.getElementById('export-bar').classList.remove('visible');
+}
+
+// ── EXCEL EXPORT ────────────────────────────────────────────────
+function exportXLSX() {
+  const rows = fiches.filter(f => f.status === 'done' && f.data).map(f => {
+    const d = f.data;
+    const all = [...(f.conformity?.issues || []), ...(f.conformity?.warnings || [])];
+    return {
+      'Officiel': d.officiel_nom || '',
+      'Rôle': d.role || '',
+      'Compétition': d.competition || '',
+      'Date du match': d.date_match || '',
+      'Rencontre': [d.equipe_domicile, d.equipe_visiteur].filter(Boolean).join(' vs ') || '',
+      'Km réels': d.km_reel || 0,
+      'Km arrondi (réf.)': d.km_arrondi || 0,
+      'IK (€)': d.ik_montant_declare || 0,
+      'Péages (€)': d.peages_montant_declare || 0,
+      'Ss-total dépl. (€)': d.sous_total_deplacement || 0,
+      'IRF déclaré (€)': d.irf_declare || 0,
+      'IRF attendu (€)': d.irf_attendu || 0,
+      'TOTAL À VERSER (€)': d.entite_payante === 'FFR' ? 0 : (d.total_declare || 0),
+      'Entité payante': d.entite_payante || '',
+      'Statut': f.conformity?.status || '',
+      'Anomalies / Observations': all.length ? all.join(' | ') : 'RAS',
+    };
+  });
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [22,20,22,14,44,10,14,10,10,18,14,14,18,14,14,60].map(w => ({ wch: w }));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Récap frais');
+  XLSX.writeFile(wb, `Recap_frais_HDF_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ── UTILS ───────────────────────────────────────────────────────
+function esc(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
